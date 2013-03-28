@@ -1,0 +1,7 @@
+{
+    "ID": "{{ key }}",
+    "Source": "{{ bucket }}",
+    "Stream": {
+        "ID": "{{ key }}"
+    }
+}

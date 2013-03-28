@@ -45,6 +45,10 @@ new({uniform_bin, MinSize, MaxSize}, Id) ->
     Source = init_source(Id),
     Diff = MaxSize - MinSize,
     fun() -> data_block(Source, MinSize + random:uniform(Diff)) end;
+new({erlydtl, DtlMod}, _Id) ->
+    fun(Vars) -> 
+        {ok, Rendered } = DtlMod:render(Vars),
+        concat(Rendered) end;
 new({function, Module, Function, Args}, Id) ->
     case code:ensure_loaded(Module) of
         {module, Module} ->
@@ -93,3 +97,28 @@ data_block({SourceCfg, SourceSz, Source}, BlockSize) ->
                   [SourceCfg, SourceSz, BlockSize]),
             Source
     end.
+
+concat(Data) ->
+    concat(Data, <<>>).
+concat([], Acc) ->
+    Acc;
+concat([ H | Data ], Acc) when is_binary(H) ->
+    concat(Data, <<Acc/binary, H/binary>>);
+concat([ H | Data ], Acc) when is_list(H) ->
+    Bin = list_to_binary(H),
+    concat(Data, <<Acc/binary, Bin/binary>>);
+concat([ H | Data ], Acc) when is_integer(H) ->
+    Bin = list_to_binary(integer_to_list(H)),
+    concat(Data, <<Acc/binary, Bin/binary>>);
+concat([ H | Data ], Acc) ->
+    Bin = list_to_binary(io_lib:format("~p", [H])),
+    concat(Data, <<Acc/binary, Bin/binary>>).
+
+
+
+
+
+
+
+
+

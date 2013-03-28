@@ -19,7 +19,7 @@
 %% under the License.
 %%
 %% -------------------------------------------------------------------
--module(basho_bench_driver_riakc_pb).
+-module(basho_bench_driver_riakc_pb_erlydtl).
 
 -export([new/1,
          run/4,
@@ -142,10 +142,13 @@ run(get_existing, KeyGen, _ValueGen, State) ->
             {error, Reason, State}
     end;
 run(put, KeyGen, ValueGen, State) ->
-    Robj0 = riakc_obj:new(State#state.bucket, KeyGen()),
+    Key = KeyGen(),
+    Vars = [{key, Key}, {bucket, State#state.bucket}],
+    Value = ValueGen(Vars),
+    Robj0 = riakc_obj:new(State#state.bucket, Key),
     Robj = case State#state.ct of
-        undefined -> riakc_obj:update_value(Robj0, ValueGen());
-        CT ->        riakc_obj:update_value(Robj0, ValueGen(), CT)
+        undefined -> riakc_obj:update_value(Robj0, Value);
+        CT ->        riakc_obj:update_value(Robj0, Value, CT)
     end,
     case riakc_pb_socket:put(State#state.pid, Robj, [{w, State#state.w},
                                                      {dw, State#state.dw}]) of
@@ -156,10 +159,12 @@ run(put, KeyGen, ValueGen, State) ->
     end;
 run(update, KeyGen, ValueGen, State) ->
     Key = KeyGen(),
+    Vars = [{key, Key}, {bucket, State#state.bucket}],
+    Value = ValueGen(Vars),
     case riakc_pb_socket:get(State#state.pid, State#state.bucket,
                              Key, [{r, State#state.r}]) of
         {ok, Robj} ->
-            Robj2 = riakc_obj:update_value(Robj, ValueGen()),
+            Robj2 = riakc_obj:update_value(Robj, Value),
             case riakc_pb_socket:put(State#state.pid, Robj2, [{w, State#state.w},
                                                               {dw, State#state.dw}]) of
                 ok ->
@@ -169,7 +174,7 @@ run(update, KeyGen, ValueGen, State) ->
             end;
         {error, notfound} ->
             Robj0 = riakc_obj:new(State#state.bucket, Key),
-            Robj = riakc_obj:update_value(Robj0, ValueGen()),
+            Robj = riakc_obj:update_value(Robj0, Value),
             case riakc_pb_socket:put(State#state.pid, Robj, [{w, State#state.w},
                                                              {dw, State#state.dw}]) of
                 ok ->
@@ -180,10 +185,12 @@ run(update, KeyGen, ValueGen, State) ->
     end;
 run(update_existing, KeyGen, ValueGen, State) ->
     Key = KeyGen(),
+    Vars = [{key, Key}, {bucket, State#state.bucket}],
+    Value = ValueGen(Vars),
     case riakc_pb_socket:get(State#state.pid, State#state.bucket,
                              Key, [{r, State#state.r}]) of
         {ok, Robj} ->
-            Robj2 = riakc_obj:update_value(Robj, ValueGen()),
+            Robj2 = riakc_obj:update_value(Robj, Value),
             case riakc_pb_socket:put(State#state.pid, Robj2, [{w, State#state.w},
                                                               {dw, State#state.dw}]) of
                 ok ->
