@@ -36,7 +36,10 @@
                  dw,
                  rw,
                  keylist_length,
-                 preloaded_keys}).
+                 preloaded_keys,
+                 searchterm,
+                 searchq
+                 }).
 
 -define(ERLANG_MR,
         [{map, {modfun, riak_kv_mapreduce, map_object_value}, none, false},
@@ -68,6 +71,7 @@ new(Id) ->
     W = basho_bench_config:get(riakc_pb_w, Replies),
     DW = basho_bench_config:get(riakc_pb_dw, Replies),
     RW = basho_bench_config:get(riakc_pb_rw, Replies),
+    ST = basho_bench_config:get(riakc_pb_search_term, "ID"),
     Bucket  = basho_bench_config:get(riakc_pb_bucket, <<"test">>),
     CT  = basho_bench_config:get(riakc_pb_content_type, undefined),
     KeylistLength = basho_bench_config:get(riakc_pb_keylist_length, 1000),
@@ -89,7 +93,9 @@ new(Id) ->
                           dw = DW,
                           rw = RW,
                           keylist_length = KeylistLength,
-                          preloaded_keys = PreloadedKeys
+                          preloaded_keys = PreloadedKeys,
+                          searchterm = ST,
+                          searchq = []
                          }};
         {error, Reason2} ->
             ?FAIL_MSG("Failed to connect riakc_pb_socket to ~p:~p: ~p\n",
@@ -153,7 +159,14 @@ run(put, KeyGen, ValueGen, State) ->
     case riakc_pb_socket:put(State#state.pid, Robj, [{w, State#state.w},
                                                      {dw, State#state.dw}]) of
         ok ->
-            {ok, State};
+            SearchQ = State#state.searchq,
+            case length(SearchQ) > 50 of
+                true ->
+                    [ _ | NSearchQ ] = SearchQ,
+                    {ok, State#state { searchq=NSearchQ ++ [Key]}};
+                false ->
+                    {ok, State#state { searchq=SearchQ ++ [Key]}}
+            end;
         {error, Reason} ->
             {error, Reason, State}
     end;
@@ -231,7 +244,27 @@ run(mr_keylist_erlang, KeyGen, _ValueGen, State) ->
 run(mr_keylist_js, KeyGen, _ValueGen, State) ->
     Keylist = make_keylist(State#state.bucket, KeyGen,
                           State#state.keylist_length),
-    mapred(State, Keylist, ?JS_MR).
+    mapred(State, Keylist, ?JS_MR);
+run(search, _KeyGen, _ValueGen, State) when length(State#state.searchq) == 0 ->
+    {silent, State};
+run(search, _KeyGen, _ValueGen, State) ->
+    Term = State#state.searchterm,
+    SearchQ = State#state.searchq,
+    Key = case lists:nth(random:uniform(length(SearchQ)), SearchQ) of
+        Bin when is_binary(Bin) -> binary_to_list(Bin);
+        Int when is_integer(Int) -> integer_to_list(Int);
+        List when is_list(List) -> List;
+        Other -> io_lib:format("~p", [Other])
+    end,
+    Query = Term ++ ":" ++ Key,
+    case riakc_pb_socket:search(State#state.pid, State#state.bucket, Query) of
+        {ok, []} ->
+            {error, {not_found, Key}, State};
+        {ok, _Results} ->
+            {ok, State};
+        {error, Reason} ->
+            {error, Reason, State}
+    end.
 
 %% ====================================================================
 %% Internal functions
