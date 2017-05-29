@@ -459,10 +459,7 @@ run({counter, value}, KeyGen, _ValueGen, State) ->
     end;
 
 run({custom_crdt, update}, KeyGen, ValueGen, State) ->
-    %CrdtUpdateFun = ValueGen(),
     Key = KeyGen(),
-    %lager:info("Key: ~p~n", [Key]),
-    %lager:info("Fun: ~p~n", [ValueGen]),
     Result = riakc_pb_socket:modify_type(State#state.pid,
                                         ValueGen,
                                         State#state.bucket, Key, [create]),
