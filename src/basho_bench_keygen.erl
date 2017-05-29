@@ -118,6 +118,9 @@ new({truncated_pareto_int, MaxKey}, Id) ->
     fun() -> erlang:min(MaxKey, Pareto()) end;
 new(uuid_v4, _Id) ->
     fun() -> basho_uuid:v4() end;
+new({quanta_sec, Quanta}, _Id) ->
+    fun() -> {Mega, Sec, _} = os:timestamp(),
+    ((Mega*1000000 + Sec) div Quanta) * Quanta end;
 new({function, Module, Function, Args}, Id)
   when is_atom(Module), is_atom(Function), is_list(Args) ->
     case code:ensure_loaded(Module) of
@@ -178,7 +181,7 @@ new({file_line_bin, Path, DoRepeat}, Id) ->
                     Bin
             end
     end;
-%% Adapt a value generator. The function keygen would work if Id was added as 
+%% Adapt a value generator. The function keygen would work if Id was added as
 %% the last parameter. But, alas, it is added as the first.
 new({valgen, ValGen}, Id) ->
     basho_bench_valgen:new(ValGen, Id);
