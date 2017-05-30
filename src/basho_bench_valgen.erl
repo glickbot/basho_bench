@@ -45,7 +45,7 @@ new({exponential_bin, MinSize, Mean}, Id)
   when is_integer(MinSize), MinSize >= 0, is_number(Mean), Mean > 0 ->
     Source = init_source(Id),
     fun() -> data_block(Source, MinSize + trunc(basho_bench_stats:exponential(1 / Mean))) end;
-new({uniform_bin, MinSize, MaxSize}, Id) 
+new({uniform_bin, MinSize, MaxSize}, Id)
   when is_integer(MinSize), is_integer(MaxSize), MinSize < MaxSize ->
     Source = init_source(Id),
     Diff = MaxSize - MinSize,
@@ -64,6 +64,8 @@ new({uniform_int, MaxVal}, _Id)
 new({uniform_int, MinVal, MaxVal}, _Id)
   when is_integer(MinVal), is_integer(MaxVal), MaxVal > MinVal ->
     fun() -> random:uniform(MinVal, MaxVal) end;
+new({custom_crdt, CrdtDef}, _Id) ->
+  fun(Obj) -> crdt_modfun(CrdtDef, Obj) end;
 new(Other, _Id) ->
     ?FAIL_MSG("Invalid value generator requested: ~p\n", [Other]).
 
@@ -80,6 +82,21 @@ dimension(_Other, _) ->
 
 -define(TAB, valgen_bin_tab).
 
+crdt_modfun({_Mod,[]}, Obj) ->
+  Obj;
+crdt_modfun({Mod,[Op|Rest]}, Obj) ->
+  case Op of
+    {update, {Key, Type, CrdtDef}} when is_binary(Key) ->
+      ModFun = fun(Obj1) -> crdt_modfun(CrdtDef, Obj1) end,
+      crdt_modfun({Mod,Rest}, erlang:apply(Mod, update, [{Key, Type}, ModFun, Obj]));
+    {update, {KeyDef, Type, CrdtDef}} ->
+      KeyGen = basho_bench_keygen:new(KeyDef,1),
+      ModFun = fun(Obj1) -> crdt_modfun(CrdtDef, Obj1) end,
+      crdt_modfun({Mod,Rest}, erlang:apply(Mod, update, [{KeyGen(), Type}, ModFun, Obj]));
+    {Function, ValDef} ->
+      ValGen = new(ValDef, 1),
+      crdt_modfun({Mod,Rest}, erlang:apply(Mod, Function, [ValGen(), Obj]))
+  end.
 init_source(Id) ->
     init_source(Id, basho_bench_config:get(?VAL_GEN_BLOB_CFG, undefined)).
 

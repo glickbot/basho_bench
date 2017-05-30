@@ -413,7 +413,7 @@ run(search_interval, _KeyGen, _ValueGen, #state{search_queries=SearchQs, start_t
     case timer:now_diff(Now, StartTime) of
         _MicroSec when _MicroSec > (Interval * 1000000) ->
             NewState = State#state{search_queries=roll_list(SearchQs),start_time=Now};
-        _MicroSec -> 
+        _MicroSec ->
             NewState = State
     end,
 
@@ -458,6 +458,20 @@ run({counter, value}, KeyGen, _ValueGen, State) ->
             {error, Reason, State}
     end;
 
+run({custom_crdt, update}, KeyGen, ValueGen, State) ->
+    Key = KeyGen(),
+    Result = riakc_pb_socket:modify_type(State#state.pid,
+                                        ValueGen,
+                                        State#state.bucket, Key, [create]),
+    case Result of
+        ok ->
+            {ok, State};
+        {ok, _} ->
+            {ok, State};
+        {error, Reason} ->
+            lager:info("Crdt Update failed, error: ~p", [Reason]),
+            {error, Reason, State}
+    end;
 run({counter, increment}, KeyGen, ValueGen, State) ->
     Amt = ValueGen(),
     Key = KeyGen(),
